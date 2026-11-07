@@ -4,5 +4,6 @@ Team members:
 - Deborah Okolocha
 - Cynthia Moyo
 - Eseoghene Jacob Gbunoghene
+- Heewoong Kim
 
-  Project: to be decided (ideas under review: Playlist Share, Choose-your-own-adventure game and Shopping cart)
+  Project: to be decided (ideas under review: Playlist Share, Choose-your-own-adventure game, Shopping cart and Study Planner)
