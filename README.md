@@ -6,6 +6,7 @@ Team members:
 - Eseoghene Jacob Gbunoghene
 - Heewoong Kim
 
+<<<<<<< HEAD
   ## Project: Study Planner
 
 ### Project Description
@@ -24,3 +25,4 @@ The dashboard will display assignments due during the week, helping students sta
 
 ### Target Audience
 Online students who balance school, work, and other responsibilities.
+=======
