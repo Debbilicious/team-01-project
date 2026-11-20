@@ -49,3 +49,42 @@ h1:focus {
 .darker-border-checkbox.form-check-input {
     border-color: #929292;
 }
+
+/* ===== Study Planner theme (WCAG 2.2 AA contrast) ===== */
+:root {
+    --sp-primary: #1D4E89;
+    --sp-primary-dark: #163C6B;
+    --sp-text: #1F2937;
+    --sp-muted: #4B5563;
+    --sp-success: #0F766E;
+    --sp-danger: #B42318;
+    --sp-panel: #F3F6FA;
+}
+
+body { color: var(--sp-text); font-size: 1rem; line-height: 1.5; }
+a, .btn-link { color: var(--sp-primary); }
+.text-muted { color: var(--sp-muted) !important; }
+
+.sidebar { background-image: none !important; background-color: var(--sp-primary) !important; }
+
+.btn-primary { background-color: var(--sp-primary); border-color: var(--sp-primary); color: #fff; }
+.btn-primary:hover, .btn-primary:focus { background-color: var(--sp-primary-dark); border-color: var(--sp-primary-dark); }
+
+.validation-message { color: var(--sp-danger); }
+.invalid { outline-color: var(--sp-danger); }
+
+/* Visible keyboard focus */
+:focus-visible { outline: 3px solid var(--sp-primary); outline-offset: 2px; }
+.sidebar :focus-visible { outline-color: #fff; }
+
+/* Large screens: keep lines readable */
+.content { max-width: 72rem; }
+.form-control, .form-select { max-width: 32rem; }
+
+/* Small screens: reflow, no sideways scrolling */
+img, table { max-width: 100%; }
+@media (max-width: 640.98px) {
+    .content { padding-left: 1rem !important; padding-right: 1rem !important; }
+    .form-control, .form-select { max-width: 100%; }
+    .btn { min-height: 44px; }
+}
