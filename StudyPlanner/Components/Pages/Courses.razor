@@ -1,0 +1,171 @@
+﻿@page "/courses"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@using StudyPlanner.Data
+@using StudyPlanner.Models
+@inject ApplicationDbContext Db
+@inject AuthenticationStateProvider AuthProvider
+
+<PageTitle>Courses</PageTitle>
+
+<h1>My courses</h1>
+
+<section aria-labelledby="form-heading" class="mb-4">
+    <h2 id="form-heading" class="h4">@(form.Id == 0 ? "Add a course" : "Edit course")</h2>
+    <EditForm Model="form" OnValidSubmit="SaveAsync">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div class="mb-3">
+            <label for="course-name" class="form-label">Course name</label>
+            <InputText id="course-name" class="form-control" @bind-Value="form.Name" />
+            <ValidationMessage For="() => form.Name" />
+        </div>
+        <div class="mb-3">
+            <label for="course-code" class="form-label">Course code (optional)</label>
+            <InputText id="course-code" class="form-control" @bind-Value="form.Code" />
+            <ValidationMessage For="() => form.Code" />
+        </div>
+        <div class="mb-3">
+            <label for="course-term" class="form-label">Term (optional)</label>
+            <InputText id="course-term" class="form-control" @bind-Value="form.Term" />
+            <ValidationMessage For="() => form.Term" />
+        </div>
+
+        <button type="submit" class="btn btn-primary">@(form.Id == 0 ? "Add course" : "Save changes")</button>
+        @if (form.Id != 0)
+        {
+            <button type="button" class="btn btn-outline-secondary ms-2" @onclick="CancelEdit">Cancel</button>
+        }
+    </EditForm>
+</section>
+
+<p role="status">@message</p>
+
+@if (courses.Count == 0)
+{
+    <p>You have no courses yet. Add your first course above.</p>
+}
+else
+{
+    <table class="table">
+        <caption class="visually-hidden">Your courses</caption>
+        <thead>
+            <tr>
+                <th scope="col">Course</th>
+                <th scope="col">Code</th>
+                <th scope="col">Term</th>
+                <th scope="col">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var c in courses)
+            {
+                <tr>
+                    <th scope="row">@c.Name</th>
+                    <td>@c.Code</td>
+                    <td>@c.Term</td>
+                    <td>
+                        <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => Edit(c)" aria-label="Edit @c.Name">Edit</button>
+                        @if (confirmDeleteId == c.Id)
+                        {
+                            <button type="button" class="btn btn-sm btn-danger" @onclick="() => DeleteAsync(c.Id)" aria-label="Confirm delete @c.Name">Confirm delete</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => confirmDeleteId = null">Cancel</button>
+                        }
+                        else
+                        {
+                            <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => confirmDeleteId = c.Id" aria-label="Delete @c.Name">Delete</button>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<Course> courses = new();
+    private Course form = new();
+    private string ownerId = "";
+    private string message = "";
+    private int? confirmDeleteId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthProvider.GetAuthenticationStateAsync();
+        ownerId = state.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        courses = await Db.Courses
+            .Where(c => c.OwnerId == ownerId)
+            .OrderBy(c => c.Name)
+            .ToListAsync();
+    }
+
+    private void Edit(Course c)
+    {
+        // Work on a copy so the list is not changed until the user saves
+        form = new Course { Id = c.Id, Name = c.Name, Code = c.Code, Term = c.Term };
+        message = "";
+    }
+
+    private void CancelEdit()
+    {
+        form = new Course();
+        message = "";
+    }
+
+    private async Task SaveAsync()
+    {
+        var name = form.Name.Trim();
+
+        if (form.Id == 0)
+        {
+            Db.Courses.Add(new Course
+            {
+                Name = name,
+                Code = form.Code?.Trim(),
+                Term = form.Term?.Trim(),
+                OwnerId = ownerId
+            });
+            message = $"Added {name}.";
+        }
+        else
+        {
+            var existing = await Db.Courses.FirstOrDefaultAsync(c => c.Id == form.Id && c.OwnerId == ownerId);
+            if (existing is null)
+            {
+                message = "That course could not be found.";
+                form = new Course();
+                return;
+            }
+            existing.Name = name;
+            existing.Code = form.Code?.Trim();
+            existing.Term = form.Term?.Trim();
+            message = $"Saved {name}.";
+        }
+
+        await Db.SaveChangesAsync();
+        form = new Course();
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(int id)
+    {
+        var existing = await Db.Courses.FirstOrDefaultAsync(c => c.Id == id && c.OwnerId == ownerId);
+        if (existing is not null)
+        {
+            Db.Courses.Remove(existing);
+            await Db.SaveChangesAsync();
+            message = $"Deleted {existing.Name} and its assignments.";
+        }
+        confirmDeleteId = null;
+        await LoadAsync();
+    }
+}
