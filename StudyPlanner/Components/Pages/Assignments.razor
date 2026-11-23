@@ -1,0 +1,257 @@
+﻿@page "/assignments"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@using StudyPlanner.Data
+@using StudyPlanner.Models
+@inject ApplicationDbContext Db
+@inject AuthenticationStateProvider AuthProvider
+
+<PageTitle>Assignments</PageTitle>
+
+<h1>My assignments</h1>
+
+@if (courses.Count == 0)
+{
+    <p>You need at least one course before you can add assignments. <a href="courses">Add a course first.</a></p>
+}
+else
+{
+    <section aria-labelledby="form-heading" class="mb-4">
+        <h2 id="form-heading" class="h4">@(form.Id == 0 ? "Add an assignment" : "Edit assignment")</h2>
+        <EditForm Model="form" OnValidSubmit="SaveAsync">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+
+            <div class="mb-3">
+                <label for="a-course" class="form-label">Course</label>
+                <InputSelect id="a-course" class="form-select" @bind-Value="form.CourseId">
+                    <option value="0">Choose a course</option>
+                    @foreach (var c in courses)
+                    {
+                        <option value="@c.Id">@c.Name</option>
+                    }
+                </InputSelect>
+            </div>
+            <div class="mb-3">
+                <label for="a-title" class="form-label">Title</label>
+                <InputText id="a-title" class="form-control" @bind-Value="form.Title" />
+                <ValidationMessage For="() => form.Title" />
+            </div>
+            <div class="mb-3">
+                <label for="a-due" class="form-label">Due date</label>
+                <InputDate id="a-due" class="form-control" @bind-Value="form.DueDate" />
+                <ValidationMessage For="() => form.DueDate" />
+            </div>
+            <div class="mb-3">
+                <label for="a-priority" class="form-label">Priority</label>
+                <InputSelect id="a-priority" class="form-select" @bind-Value="form.Priority">
+                    @foreach (var p in Enum.GetValues<Priority>())
+                    {
+                        <option value="@p">@p</option>
+                    }
+                </InputSelect>
+            </div>
+            <div class="mb-3">
+                <label for="a-notes" class="form-label">Notes (optional)</label>
+                <InputTextArea id="a-notes" class="form-control" rows="3" @bind-Value="form.Notes" />
+                <ValidationMessage For="() => form.Notes" />
+            </div>
+
+            <button type="submit" class="btn btn-primary">@(form.Id == 0 ? "Add assignment" : "Save changes")</button>
+            @if (form.Id != 0)
+            {
+                <button type="button" class="btn btn-outline-secondary ms-2" @onclick="CancelEdit">Cancel</button>
+            }
+        </EditForm>
+    </section>
+}
+
+<p role="status">@message</p>
+
+@if (assignments.Count == 0)
+{
+    <p>You have no assignments yet.</p>
+}
+else
+{
+    <table class="table">
+        <caption class="visually-hidden">Your assignments, sorted by due date</caption>
+        <thead>
+            <tr>
+                <th scope="col">Done</th>
+                <th scope="col">Assignment</th>
+                <th scope="col">Course</th>
+                <th scope="col">Due</th>
+                <th scope="col">Priority</th>
+                <th scope="col">Status</th>
+                <th scope="col">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var a in assignments)
+            {
+                <tr>
+                    <td>
+                        <input type="checkbox" class="form-check-input" checked="@a.IsComplete"
+                               @onchange="() => ToggleAsync(a.Id)" aria-label="Mark @a.Title as complete" />
+                    </td>
+                    <th scope="row">
+                        @a.Title
+                        @if (!string.IsNullOrWhiteSpace(a.Notes))
+                        {
+                            <div class="text-muted small">@a.Notes</div>
+                        }
+                    </th>
+                    <td>@a.Course?.Name</td>
+                    <td>@a.DueDate.ToString("ddd, d MMM yyyy")</td>
+                    <td>@a.Priority</td>
+                    <td>@StatusText(a)</td>
+                    <td>
+                        <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => Edit(a)" aria-label="Edit @a.Title">Edit</button>
+                        @if (confirmDeleteId == a.Id)
+                        {
+                            <button type="button" class="btn btn-sm btn-danger" @onclick="() => DeleteAsync(a.Id)" aria-label="Confirm delete @a.Title">Confirm delete</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => confirmDeleteId = null">Cancel</button>
+                        }
+                        else
+                        {
+                            <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => confirmDeleteId = a.Id" aria-label="Delete @a.Title">Delete</button>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<Course> courses = new();
+    private List<Assignment> assignments = new();
+    private Assignment form = new();
+    private string ownerId = "";
+    private string message = "";
+    private int? confirmDeleteId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthProvider.GetAuthenticationStateAsync();
+        ownerId = state.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
+        await LoadAsync();
+        form = NewForm();
+    }
+
+    private Assignment NewForm() => new Assignment
+    {
+        CourseId = courses.FirstOrDefault()?.Id ?? 0,
+        DueDate = DateTime.Today.AddDays(7)
+    };
+
+    private async Task LoadAsync()
+    {
+        courses = await Db.Courses.Where(c => c.OwnerId == ownerId).OrderBy(c => c.Name).ToListAsync();
+        assignments = await Db.Assignments
+            .Where(a => a.OwnerId == ownerId)
+            .Include(a => a.Course)
+            .OrderBy(a => a.IsComplete)
+            .ThenBy(a => a.DueDate)
+            .ToListAsync();
+    }
+
+    private static string StatusText(Assignment a)
+    {
+        if (a.IsComplete) return "Complete";
+        return a.DueDate.Date < DateTime.Today ? "Overdue" : "Not complete";
+    }
+
+    private void Edit(Assignment a)
+    {
+        form = new Assignment
+        {
+            Id = a.Id, Title = a.Title, DueDate = a.DueDate, Priority = a.Priority,
+            Notes = a.Notes, IsComplete = a.IsComplete, CourseId = a.CourseId
+        };
+        message = "";
+    }
+
+    private void CancelEdit()
+    {
+        form = NewForm();
+        message = "";
+    }
+
+    private async Task SaveAsync()
+    {
+        // The chosen course must exist and belong to this student
+        var courseOk = form.CourseId != 0 &&
+            await Db.Courses.AnyAsync(c => c.Id == form.CourseId && c.OwnerId == ownerId);
+        if (!courseOk)
+        {
+            message = "Please choose one of your courses.";
+            return;
+        }
+
+        var title = form.Title.Trim();
+
+        if (form.Id == 0)
+        {
+            Db.Assignments.Add(new Assignment
+            {
+                Title = title,
+                DueDate = form.DueDate.Date,
+                Priority = form.Priority,
+                Notes = form.Notes?.Trim(),
+                CourseId = form.CourseId,
+                OwnerId = ownerId
+            });
+            message = $"Added {title}.";
+        }
+        else
+        {
+            var existing = await Db.Assignments.FirstOrDefaultAsync(a => a.Id == form.Id && a.OwnerId == ownerId);
+            if (existing is null)
+            {
+                message = "That assignment could not be found.";
+                form = NewForm();
+                return;
+            }
+            existing.Title = title;
+            existing.DueDate = form.DueDate.Date;
+            existing.Priority = form.Priority;
+            existing.Notes = form.Notes?.Trim();
+            existing.CourseId = form.CourseId;
+            message = $"Saved {title}.";
+        }
+
+        await Db.SaveChangesAsync();
+        form = NewForm();
+        await LoadAsync();
+    }
+
+    private async Task ToggleAsync(int id)
+    {
+        var existing = await Db.Assignments.FirstOrDefaultAsync(a => a.Id == id && a.OwnerId == ownerId);
+        if (existing is not null)
+        {
+            existing.IsComplete = !existing.IsComplete;
+            await Db.SaveChangesAsync();
+            message = existing.IsComplete ? $"Marked {existing.Title} complete." : $"Marked {existing.Title} not complete.";
+        }
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(int id)
+    {
+        var existing = await Db.Assignments.FirstOrDefaultAsync(a => a.Id == id && a.OwnerId == ownerId);
+        if (existing is not null)
+        {
+            Db.Assignments.Remove(existing);
+            await Db.SaveChangesAsync();
+            message = $"Deleted {existing.Title}.";
+        }
+        confirmDeleteId = null;
+        await LoadAsync();
+    }
+}
